@@ -8,4 +8,20 @@ Robust Multimodal Emotion Recognition under Incomplete Modalities via Transforme
 - Achieves state-of-the-art performance across multiple benchmark datasets
 - Demonstrates strong robustness under high missing-rate scenarios
 
+## Results
+
+Below are key experimental results of our proposed RMM-TCVAE framework.
+
+**Overall architecture of the proposed RMM-TCVAE:**  
+![Framework](./results/Fig3.svg)
+
+**t-SNE visualizations of the latent representations on the IEMOCAP (four-class) test set:**  
+![t-SNE visualizations](./Fig8.svg)
+
+**Confusion matrices of different models on the IEMOCAP:**  
+![Confusion matrices](./results/Fig9.svg)
+
+---
+
+
 ### Upon acceptance of our manuscript, we will release our code to this code repository at the earliest possible time. We greatly appreciate your attention and look forward to your feedback.
