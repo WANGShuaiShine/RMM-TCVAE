@@ -184,5 +184,3 @@ Below are key experimental results of our proposed RMM-TCVAE framework.
 ![Confusion matrices](./Figs/Fig9.svg)
 
 ---
-
-### Upon acceptance of our manuscript, we will release our code to this code repository at the earliest possible time. We greatly appreciate your attention and look forward to your feedback.
