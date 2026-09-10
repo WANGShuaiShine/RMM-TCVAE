@@ -1,0 +1,1081 @@
+
+=== 第 1 页 ===
+TMDC: A Two-Stage Modality Denoising and Complementation Framework for
+Multimodal Sentiment Analysis with Missing and Noisy Modalities
+Yan Zhuang*1, Minhao Liu*1,2, Yanru Zhang1,2, Jiawen Deng1†, Fuji Ren1,2†
+1University of Electronic Science and Technology of China
+2Shenzhen Institute for Advanced Study, UESTC
+202211081370@std.uestc.edu.cn,{minhaoliu,yanruzhang,dengjw,renfuji}@uestc.edu.cn
+Abstract
+Multimodal Sentiment Analysis (MSA) aims to infer human
+sentiment by integrating information from multiple modali-
+ties such as text, audio, and video. In real-world scenarios,
+however, the presence of missing modalities and noisy sig-
+nals significantly hinders the robustness and accuracy of ex-
+isting models. While prior works have made progress on these
+issues, they are typically addressed in isolation, limiting over-
+all effectiveness in practical settings. To jointly mitigate the
+challenges posed by missing and noisy modalities, we pro-
+pose a framework calledTwo-stage Modality Denoising and
+Complementation (TMDC). TMDC comprises two sequen-
+tial training stages. In the Intra-Modality Denoising Stage,
+denoised modality-specific and modality-shared representa-
+tions are extracted from complete data using dedicated de-
+noising modules, reducing the impact of noise and enhancing
+representational robustness. In the Inter-Modality Comple-
+mentation Stage, these representations are leveraged to com-
+pensate for missing modalities, thereby enriching the avail-
+able information and further improving robustness. Extensive
+evaluations on MOSI, MOSEI, and IEMOCAP demonstrate
+that TMDC consistently achieves superior performance com-
+pared to existing methods, establishing new state-of-the-art
+results.
+Introduction
+Multimodal Sentiment Analysis (MSA) leverages data from
+multiple modalities, such as text, video, and audio, to predict
+the emotional state (Zadeh et al. 2016). With the rapid ad-
+vancements in multimedia and multimodal learning (Zadeh
+et al. 2018; Liang, Zadeh, and Morency 2022), more and
+more researchers are focusing on MSA. However, practical
+applications often face two key challenges: missing modal-
+ities, which is caused by privacy concerns (Jaiswal and
+Provost 2020; Zhao, Li, and Jin 2021) or incomplete data
+collection (Liu et al. 2021), and noisy inputs from real-world
+sensors. These factors severely hinder the reliability and ef-
+fectiveness of MSA systems.
+To tackle these challenges, most existing studies treat
+missing and noisy modalities as separate problems and de-
+velop isolated solutions. For noisy inputs, many works adopt
+*These authors contributed equally.
+†Corresponding authors.
+Copyright © 2026, Association for the Advancement of Artificial
+Intelligence (www.aaai.org). All rights reserved.
+Figure 1: The existing model yields correct predictions when
+the input contains only missing modalities (highlighted in
+green), but fails when both missing (green) and noisy modal-
+ities (red) are present.
+information-theoretic approaches, such as the use of the in-
+formation bottleneck (Mai, Zeng, and Hu 2022), to suppress
+irrelevant noise. On the other hand, methods targeting miss-
+ing modalities often design reconstruction mechanisms to
+restore missing signals from available ones. For example,
+MPLMM (Guo, Jin, and Zhao 2024) distills knowledge from
+pre-trained models into learnable prompts to compensate for
+missing data. IMDer (Wang, Li, and Cui 2024) trains diffu-
+sion models on complete datasets and applies them at infer-
+ence time to reconstruct absent modalities. DiCMoR (Wang,
+Cui, and Li 2023) creates category-specific flow-based gen-
+erators for restoration, while MoMKE (Xu, Jiang, and Liang
+2024) trains multiple modality-specific experts and com-
+bines their outputs to form joint representations. Despite
+their advances, these methods typically assume clean inputs
+and overlook the impact of noisy data. As illustrated in Fig-
+ure 1, they often perform well under missing-modality con-
+ditions but fail when noise and missing data co-occur. Errors
+from noisy inputs or inaccurate reconstruction compound
+during training and inference, ultimately harming overall
+performance.
+To jointly address both challenges, we propose a Two-
+stage Modality Denoising and Complementation (TMDC)
+framework. TMDC adopts a two-stage training paradigm.
+In the Intra-Modality Denoising Stage, TMDC is trainedarXiv:2511.10325v1  [cs.MM]  13 Nov 2025
+=== 第 2 页 ===
+on complete data to capture both denoised modality-specific
+and modality-common representations for each modality. To
+handle noise, TMDC includes two denoising modules. A
+modality-specific denoising module, composed of a Vari-
+ational Information Bottleneck (VIB) (Alemi et al. 2022),
+attention layers (Vaswani et al. 2017), and fully connected
+networks, filters noise while preserving distinctive features
+of each modality. A modality-common module learns to ex-
+tract noise-robust features shared across modalities. In the
+Inter-Modality Complementation Stage, the denoised out-
+puts from available modalities are used to complement miss-
+ing ones by leveraging both shared and specific information
+extracted during the first stage. The final emotion prediction
+is made by integrating all observed and reconstructed repre-
+sentations through a fully connected layer.
+The key contributions of this paper are as follows:
+• TMDC, a framework that simultaneously addresses both
+missing and noisy modalities is proposed.
+• TMDC complements missing modalities using both
+modality-invariant and modality-specific information
+from available modalities.
+• Extensive experiments on multiple datasets, including
+scenarios with varying levels of data noise, demonstrates
+that TMDC achieves state-of-the-art performance.
+Related Work
+Multimodal Sentiment Analysis
+Multimodal Sentiment Analysis (MSA) integrates text,
+video, and audio signals to predict sentiment state(Zadeh
+et al. 2016). Most existing methods assume the availabil-
+ity of all three modalities and focus on designing sophis-
+ticated fusion networks to integrate these heterogeneous
+sources effectively (Zong et al. 2023; Hazarika, Zimmer-
+mann, and Poria 2020; Lin and Hu 2023; Wang et al. 2022;
+Mai et al. 2023; Zeng et al. 2023; Zhu et al. 2024; Zhuang
+et al. 2025). Some approaches prioritize modality align-
+ment; for instance, MISA (Hazarika, Zimmermann, and Po-
+ria 2020) and FactorCL (Liang et al. 2024) map each modal-
+ity into modality-shared and modality-specific representa-
+tions, or task-relevant and task-irrelevant components. Simi-
+larly, MULT (Tsai et al. 2019) and AcFormer (Zong et al.
+2023) employ cross-modal attention mechanisms to align
+pairs of modalities. Other methods refine fusion at a more
+granular level. GLoMo (Zhuang et al. 2024) utilizes MoE
+networks to extract fine-grained local information for en-
+hanced integration, while PS2RI (Fang et al. 2024) incorpo-
+rates sarcasm-aware cues to aid sentiment prediction. KEBR
+(Zhu et al. 2024), on the other side, explores common senti-
+mental knowledge in unlabeled videos to enrich representa-
+tion. Although these models perform well when all modal-
+ities are available, their effectiveness deteriorates signifi-
+cantly when one or more modalities are missing, a common
+scenario in real-world applications, which limits their prac-
+tical usability (Guo, Jin, and Zhao 2024; Li et al. 2024b,a;
+Wei, Luo, and Luo 2023).Incomplete Multimodal Learning
+With the growing demand for robust multimodal models,
+researchers have increasingly focused on incomplete mul-
+timodal learning. Most existing methods attempt to re-
+construct the missing modality using pre-trained external
+knowledge. For example, MMIN (Zhao, Li, and Jin 2021)
+involves pre-training on complete datasets before transfer-
+ring or fine-tuning in situations with missing modalities.
+MPLMM (Guo, Jin, and Zhao 2024) leverages external
+datasets and distills cross-modal information into learnable
+prompts to supplement missing data. IMDer (Wang, Li, and
+Cui 2024) train diffusion models on complete datasets for
+each modality, later using them for reconstruction when
+a modality is missing. Similarly, DiCMoR (Wang, Cui,
+and Li 2023) employs category-specific flow-based mod-
+els to restore absent modalities. MoMKE (Xu, Jiang, and
+Liang 2024) takes a different approach by training modality-
+specific MoE networks on complete datasets to capture
+modality-specific representations and then fusing them into
+a joint representation.
+While these methods have achieved notable success, they
+assume that the collected data is noise-free. However, real-
+world multimodal data often contains inherent noise (Mai,
+Zeng, and Hu 2022; Gao et al. 2024), and errors intro-
+duced during reconstruction further degrade performance.
+This reduces the robustness of these models, particularly in
+noisy environments. To address this limitation, we propose
+TMDC, a framework that explicitly considers both intrin-
+sic noise and errors introduced by missing modalities. By
+employing a denoising-first learning approach, TMDC en-
+hances representation robustness, making it more suitable
+for real-world applications.
+Methodology
+Problem Definition
+Given a datasetD={XA
+i, XT
+i, XV
+i}N
+i=1comprising three
+modalities (e.g. text (‘T’), video (‘V’), and audio (‘A’)),
+each elementXm
+irepresents the representation of modal-
+itymforithinstance,m∈ {A, T, V}. Specifically,Xm
+i∈
+RLm×Dm, whereL mdenotes the sequence length, andD m
+represents the feature dimension of modalitym. For sim-
+plicity, we omit the subscriptiand useXmto denote the
+representation of modalitym. In real-world scenarios, some
+modalities may be missing due to various factors. To denote
+missing modalities, we use ˆXm. Additionally, modality rep-
+resentations inherently contain noise, which we do not ex-
+plicitly annotate. The goal of MSA with missing and noisy
+modalities is to train effective and robust models under dif-
+ferent missing-modality and noisy-modality conditions.
+Preliminaries
+Given a modality representationXmwith inherent noise,
+VIB approximates the information bottleneck by learning a
+compressed encodingXm
+sthat retains essential task-relevant
+information while filtering out unnecessary information.
+The optimization objective is formulated as:
+Lm=I(Xm
+s, y)−βI(Xm
+s, Xm).(1)
+=== 第 3 页 ===
+Figure 2: Illustration of the proposed TMDC. TMDC includes two training stages. In the first stage, TMDC learns from complete
+modality information using two denoising modules. The modality-specific denoising module applies separate networks to each
+modality to remove noise while preserving unique modality information. Simultaneously, the modality-common denoising
+module employs a shared network to filter noise across multiple modalities and extract common information. In the second
+stage, the learned shared information is used to supplement missing modalities.
+Hereyis the ground truth,I(·,·)denotes mutual infor-
+mation, measuring the correlation between representations.
+A higher mutual information value indicates stronger rele-
+vance.Xm
+srepresents the denoised modality representation,
+andβis a Lagrange multiplier.
+The mutual informationI(Xm
+s, y)can be implemented
+using task-related lossL TASK (ym, y)andI(Xm
+s, Xm)can
+be approximated by employing KL divergence, leading to
+the revised objective:
+Lm=LTASK (ym, y) +βKL(p(em
+s|em)||N(0,I)).(2)
+Hereem
+s∈Xm
+s,em∈Xm,p(em
+s|em)∼ N(µm
+s,(σm
+s)2I),
+andµm
+s,σm
+sdenote the mean and variance of the denoised
+representation, which are predicted using fully connected
+layers through:
+µm
+s=Wm
+1em+bm
+1,(3)
+and:
+σm
+s=Wm
+2em+bm
+2.(4)
+Following the reparameterization trick (Kingma 2013) as in
+(Mai, Zeng, and Hu 2022; Gao et al. 2024; Alemi et al.
+2022), denoised representation can be constructed as:
+Xm
+s=µm
+s+ϵσm
+s.(5)
+Hereϵ∈ N(0,I).ymis the predicted label using denoised
+representationXm
+sthrough a linear layer:
+ym
+s=Wm
+3Xm
+s+bm
+3.(6)
+HereWm
+1,Wm
+2,Wm
+3are trainable weights, andbm
+1,bm
+2,bm
+3
+are bias terms.Model Overview
+We propose TMDC, a two-stage modality denoising and
+complementation framework to handle missing and noisy
+modalities in MSA. As illustrated in Figure 2, TMDC
+consists of the Intra-Modality Denoising (IMD) Stage
+and the Inter-Modality Complementation (IMC) Stage. In
+the IMD Stage, TMDC learns denoised modality-specific
+and modality-invariant representations from complete mul-
+timodal data. The Modality-Specific Denoising (MSD)
+Module, which incorporates modality-specific VIB (Alemi
+et al. 2022) and attention layers (Vaswani et al. 2017),
+extracts modality-specific representations. Meanwhile, the
+Modality-Common Denoising (MCD) Module, utilizing
+shared VIB and attention layers, captures shared representa-
+tions across modalities. While in the IMC Stage, TMDC pro-
+cesses incomplete data with missing modalities. The avail-
+able modality-specific and modality-invariant representa-
+tions are leveraged to complement missing information. The
+final integrated representation is then passed through a fully
+connected layer for sentiment prediction. The following sec-
+tions provide a detailed introduction of each component and
+process within TMDC.
+Intra-Modality Denoising Stage
+This section details the first stage of TMDC. Following
+prior works (Wang, Li, and Cui 2024; Wang, Cui, and Li
+2023; Guo, Jin, and Zhao 2024; Xu, Jiang, and Liang 2024),
+TMDC is initially trained on the complete dataset to ob-
+tain comprehensive information from all modalities. How-
+=== 第 4 页 ===
+ever, unlike existing approaches that overlook inherent noise
+during training, TMDC explicitly addresses this issue by
+introducing two modules: the Modality-Specific Denois-
+ing (MSD) Module and the Modality-Common Denoising
+(MCD) Module. These modules separately extract modality-
+specific and shared information while filtering out noise. Be-
+low, we describe each module in detail.
+Since different modalities have different dimensions, fol-
+lowing existing studies(Tsai et al. 2019), we use the 1D tem-
+poral convolutional layer (Conv1D) with a kernel size of
+3×3to standardize each modality to the same dimension
+(D) and sequence length (T) through:
+Xm=Wm
+3×3(Xm).(7)
+HereXm∈ RT×D, andWm
+3×3is the trainable weights.
+Modality-Specific Denoising ModuleThis module aims
+to reduce noise within each modality and extract modality-
+specific representations. To achieve this, TMDC employs a
+distinct yet structurally identical network for each modality.
+Inspired by prior methods (Mai, Zeng, and Hu 2022; Gao
+et al. 2024), we adopt VIB (Alemi et al. 2022) to simulta-
+neously remove noise and redundant information, which is
+introduced in Preliminaries Section. Specifically, for each
+modalitym, we use the VIB to obtain denoised represen-
+tationsXm
+sand get the predicted labelym
+susing Equations
+3-6. Once the denoised representations are obtained, they
+are processed through a modality-specific attention network,
+which consists of a multi-head attention (MHA) layer and a
+residual fully connected layer, enabling interactions among
+different modality representations through:
+Xm
+Spe=MHAm(Xm
+s, Xm
+s) +Xm
+s,(8)
+and:
+ˆXm
+Spe=Xm
+Spe+Wm
+4Xm
+Spe+bm
+4.(9)
+To ensure these representations retain modality-specific in-
+formation, a fully connected layer predicts the label through:
+ym
+Spe=Wm
+5ˆXm
+Spe+bm
+5.(10)
+Notably, each modality has its own independent network, as
+illustrated in Figure 2, and the network parameters are not
+shared across modalities.
+Modality-Common Denoising ModuleThis module ex-
+tracts denoised, modality-invariant features shared across all
+modalities. Its architecture is similar to the MSD Module,
+with a key difference: the parameters in Conv1D, VIB and
+Attention layers are shared, as shown in Figure 2.
+Specifically, denoised modality-invariant representation
+Xm
+cfor each modalitymis obtained using Equations 3-
+5. And the representation after attention interaction is ob-
+tained, denoted as ˆXm
+Com for modalitym, by changing query
+and key toXm
+cin Equation 8 and changingXm
+SpetoXm
+Com
+in Equation 9. The predicted labelym
+cfrom the denoised
+modality-invariant representationXm
+c, andym
+Com from the
+interaction representation ˆXm
+Com for each modalitymare
+then obtained through separate linear layers.Inter-Modality Complementation Stage
+To simulate real-world conditions where certain modalities
+may be unavailable, we randomly set the representation of
+the missing modality to a zero vector during training. With-
+out loss of generality, we assume the audio modality (A) is
+missing in this case (as illustrated in Figure 2), resulting in
+model input of the form{ ˆXA, XT, XV}.
+To compensate for the missing information, we leverage
+the available modalities through a structured fusion strategy.
+For the text and video modalities, we first extract two types
+of representations using VIB: (1) modality-specific repre-
+sentationsXT
+sandXV
+s; and (2) modality-invariant repre-
+sentationsXT
+candXV
+cusing Equations 3-5. To enhance
+the expressiveness of uni-modal representations, we inte-
+grate both type of representations with modality-specific at-
+tention layer trained in the first stage, whereXm1
+sserves as
+the query, andXm1
+cacts as the key and value through:
+Xm1
+All=MHAm1(Xm1
+s, Xm1
+c),(11)
+and:
+ˆXm1
+All=Xm1
+All+Wm1
+AllXm1
+All+bm1
+All.(12)
+Herem1∈ {T, V}.
+To further compensate for the missing modality, we model
+cross-modal dependencies between the available modalities
+using a bidirectional attention mechanism. Specifically, we
+extract complementary features by swapping the roles of the
+query and key in the attention layers in Equation 11:X T2V
+is obtained by setting the query toXT
+cand the key/value
+toXV
+s, and vice versa forX V2T. The corresponding en-
+hanced features ˆXT2V andˆXV2T are computed using the
+same transformation as in Equation 12.
+We then fuse the cross-modal features by adding
+ˆXT2V andˆXV2T to produce a compensated representation
+XCompensate . The final multimodal representation is con-
+structed by concatenating the compensated features with the
+refined text and video representations, followed by a fully
+connected layer for sentiment prediction:
+X= [X Compensate ,ˆXT
+All,ˆXV
+All],(13)
+yAll=W AllX+b All.(14)
+In cases where multiple modalities are missing, for ex-
+ample, when only the audio modality is available, a differ-
+ent compensation strategy is applied. The available modal-
+ity undergoes the same refinement as described above. For
+the missing modalities, we approximate their representa-
+tions using self-attention within the available modality by
+changing query and key toXA
+candXA
+sin Equation 11 and
+transform the obtained representation to get ˆXA2A through
+Equation 12. Finally, the multimodal representation in this
+scenario is formed by repeating the compensated audio rep-
+resentation:
+X= [ ˆXA
+All,ˆXA2A,ˆXA2A].(15)
+Training Objectives
+This section outlines the training objectives for both IMD
+and IMC stages in TMDC framework. Since MSA involves
+=== 第 5 页 ===
+both classification and regression tasks, we first introduce
+the task-specific loss function, denoted asL TASK . For re-
+gression tasks, we use Mean Squared Error (MSE) loss,
+while for classification tasks, the Cross-Entropy loss is ap-
+plied.
+In the IMD Stage, TMDC is trained on the com-
+plete dataset to learn both modality-specific and modality-
+invariant representations. The training objective includes
+two components: (1) VIB loss using Equation 2 to encour-
+age denoised representation learning; and (2) task-specific
+losses applied to representations after modality interactions.
+In order to distinguish different task-specific losses, we de-
+fine the loss of different representations as:
+Lm
+b=LTASK (ym
+b, y).(16)
+Hereb∈ {Spe, Com}denotes the predictions, andmde-
+notes the modality. The overall loss function for IMD stage
+is formulated as:
+LIMD =X
+m∈{A,T,V}(X
+b∈{Spe,Com}Lm
+b+X
+k∈{s,c}Lm
+k).(17)
+Herekdenotes the loss from the modality-specific (s) or
+modality-invariant (c) representations using Equation 2 in
+MSD or MCD module.
+In the IMC Stage, TMDC is optimized based only on the
+final fused representation. Here, the training objective fo-
+cuses solely on the prediction loss for the concatenated mul-
+timodal representation:
+LIMC =LTASK (yAll, y).(18)
+Experiment
+Datasets and Evaluation Criteria
+We evaluate TMDC on three benchmark datasets: MOSI
+(Zadeh et al. 2016), MOSEI (Zadeh et al. 2018), and IEMO-
+CAP (Busso et al. 2008). MOSI and MOSEI are regression-
+based sentiment datasets with scores from -3 to +3. MOSI
+includes 2,199 video clips, while MOSEI has 22,856 clips.
+Following prior work (Xu, Jiang, and Liang 2024; Wang,
+Li, and Cui 2024; Guo, Jin, and Zhao 2024), we convert
+scores into binary labels and report accuracy and F1-score.
+IEMOCAP contains 5,531 utterances across five sessions.
+We follow common practice (Xu, Jiang, and Liang 2024) to
+classify four emotions: neutral, happy, sad, and angry. Per-
+formance is measured using weighted accuracy (WA) and
+unweighted accuracy (UA) under five-fold cross-validation.
+Experiment Setups
+Feature ExtractionFollowing previous studies (Lian et al.
+2023; Xu, Jiang, and Liang 2024), we adopt the same feature
+extraction methods for all three datasets. For the text modal-
+ity, we use the pre-trained DeBERTa-large model (He et al.
+2021) to obtain textual representations. For the audio modal-
+ity, we extract features using the pre-trained wav2vec-large
+model (Schneider et al. 2019). For the video modality, we
+apply the MTCNN face detection algorithm (Zhang et al.
+2016) followed by the pre-trained MA-Net model (Zhao,Liu, and Wang 2021) to obtain video representations. The
+final feature dimensions for the text, audio, and video modal-
+ities are 1024, 512, and 1024, respectively.
+Implementation DetailsConsistent with prior work (Xu,
+Jiang, and Liang 2024; Guo, Jin, and Zhao 2024), we evalu-
+ate the performance of TMDC under fixed missing modality
+scenarios, where a specific modality is absent during train-
+ing, validation, and testing. For example, in Table 1, ‘A’ in-
+dicates that only the audio modality is available. All experi-
+ments are implemented in PyTorch and conducted on a GTX
+3090 GPU with CUDA 11.5. We use Torch version 1.12.1
+for model training and Adam optimizer (Kingma and Ba
+2014) across all datasets. More implementation details and
+hyper-parameters are shown in Supplementary Material.
+Comparison with State-of-the-art Methods
+To comprehensively evaluate TMDC’s performance, we
+compare it with several state-of-the-art methods, including
+MCTN (Pham et al. 2019), MMIN (Zhao, Li, and Jin 2021),
+GCNet (Lian et al. 2023), IMDer (Wang, Li, and Cui 2024),
+DiCMoR (Wang, Cui, and Li 2023), MPLMM (Guo, Jin,
+and Zhao 2024), MoMKE (Xu, Jiang, and Liang 2024), IF-
+MMIN (Zuo et al. 2023), and MRAN (Luo, Xu, and Lai
+2023). Table 1 presents the results on the MOSI, MOSEI,
+and IEMOCAP datasets.
+Our findings show that TMDC outperforms all baseline
+models in most scenarios, with only one exception: when
+only the audio modality is available in the MOSI dataset.
+However, in all other MOSI settings, TMDC surpasses
+existing methods. Moreover, TMDC consistently achieves
+state-of-the-art results across all missing-modality scenar-
+ios in the MOSEI and IEMOCAP datasets. Specifically,
+on MOSI, TMDC achieves an average accuracy of 77.64
+and an F1-score of 77.35, outperforming the second-best
+model, MoMKE, by 0.59 and 0.89, respectively. On MO-
+SEI, TMDC attains 81.22 accuracy and 80.76 F1-score, im-
+proving upon the strongest baseline by 0.78 in both met-
+rics. For IEMOCAP, TMDC achieves a WA of 73.77 and a
+UA of 73.64, exceeding the best competing method by 0.42
+and 0.86, respectively. These results highlight TMDC’s ef-
+fectiveness in learning robust representations.
+Ablation Study
+To investigate how each module and stage contributes to
+TMDC’s effectiveness, we conduct an ablation study by
+evaluating four TMDC variants: (1) ‘w/o IMD’: Excludes
+the Intra-Modality Denoising stage, meaning TMDC is not
+trained on complete datasets before transitioning to the IMC
+stage. (2) ‘w/o IMC’: Removes Inter-Modality Complemen-
+tation, where representations from available modalities are
+directly concatenated without additional compensation af-
+ter the IMD stage. (3) ‘w/o MCD’: Excludes the Modality-
+Common Denoising Module in both stages, preventing any
+compensation for missing information. (4) ‘w/o MSD’: Re-
+moves the Modality-Specific Denoising Module in both
+stages, relying only on shared modality-invariant informa-
+tion for predictions.
+Table 2 presents the average results of TMDC and its
+four variants across all seven missing-modality scenarios.
+=== 第 6 页 ===
+ModelsModalities
+A T V A,V A,T T,V T,A,V
+Results on MOSI
+ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1
+MCTN 56.10/54.50 79.10/79.20 55.00/54.40 57.50/57.40 81.00/81.00 81.10/81.20 81.40/81.50
+MMIN 55.30/51.50 83.80/83.80 57.00/54.00 60.40/58.50 84.00/84.00 83.80/83.90 84.60/84.40
+GCNet 56.10/54.50 83.70/83.60 56.10/55.70 62.00/61.90 84.50/84.40 84.30/84.20 85.20/85.10
+IMDer 62.00/62.20 84.80/84.70 61.30/60.80 63.60/63.40 85.40/85.30 85.50/85.40 85.70/85.60
+DiCMoR 60.50/60.80 84.50/84.40 62.20/60.20 64.00/63.50 85.50/85.50 85.50/85.40 85.70/85.60
+MPLMM 62.71/63.6580.12/80.31 63.12/63.74 65.02/65.41 80.76/81.09 81.12/81.19 -
+MoMKE63.19/58.61 86.59/86.52 63.35/63.34 64.04/64.66 87.20/87.17 87.04/87.00 87.96/87.89
+TMDC 62.35/60.2487.35/87.27 64.63/64.82 65.40/65.60 87.50/87.45 87.96/87.87 88.26/88.19
+Results on MOSEI
+ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1 ACC/F1
+MCTN 62.70/54.50 82.60/82.80 62.60/57.10 63.70/62.70 83.50/83.30 83.20/83.20 84.20/84.20
+MMIN 58.90/59.50 82.30/82.40 59.30/60.00 63.50/61.90 83.70/83.30 83.80/83.40 84.30/84.20
+GCNet 60.20/60.30 83.00/83.20 61.90/61.60 64.10/57.20 84.30/84.40 84.30/84.40 85.20/85.10
+IMDer 63.80/60.60 84.50/84.50 63.90/63.60 64.90/63.50 85.10/85.10 85.00/85.00 85.10/85.10
+DiCMoR 62.90/60.40 84.20/84.30 63.60/63.60 65.20/64.40 85.00/84.90 84.90/84.90 85.10/85.10
+MPLMM 67.33/68.71 79.12/79.17 67.29/69.40 68.21/69.91 80.45/80.43 80.11/80.13 -
+MoMKE 72.56/71.03 86.46/86.43 70.12/70.23 73.34/71.82 86.68/86.61 86.79/86.69 87.12/87.03
+TMDC73.64/72.23 86.87/86.82 71.60/70.65 74.13/73.41 87.15/87.14 87.48/87.43 87.67/87.62
+Results on IEMOCAP
+WA/UA WA/UA WA/UA WA/UA WA/UA WA/UA WA/UA
+MCTN 49.75/51.62 62.42/63.78 48.92/45.73 56.34/55.84 68.34/69.46 67.84/68.34 -
+MMIN 56.58/59.00 66.57/68.02 52.52/51.60 63.99/65.43 72.94/75.14 72.67/73.61 -
+IF-MMIN 55.03/53.20 67.02/68.20 51.97/50.41 65.33/66.52 74.05/75.44 72.68/73.62 -
+MRAN 55.44/57.01 65.31/66.42 53.23/49.80 64.70/64.46 73.00/74.58 72.11/72.24 -
+MoMKE 70.32/71.38 77.82/78.37 58.60/54.70 68.85/67.65 79.89/79.53 77.87/77.84 80.13/79.99
+TMDC70.45/71.40 77.88/78.44 59.18/55.33 70.21/69.91 79.99/81.45 78.20/78.29 80.48/80.69
+Table 1: Performance comparison under different modality combinations on three datasets. Best performance is bold.
+We observe that removing any stage results in performance
+degradation, but the effects of removing modules vary across
+datasets. Overall, removing both denoising modules leads to
+performance degradation, with ‘w/o MSD’ having a more
+pronounced impact than ‘w/o MCD’. This may be because
+modality-specific information is more discriminative than
+modality-invariant information, as the latter can be inferred
+from other modalities, whereas the former cannot. Conse-
+quently, losing modality-specific information results in a
+greater drop in performance. Notably, the ‘w/o IMC’ variant
+suffers the most significant drop across all datasets. This is
+likely because, while the IMD stage has access to all modal-
+ities, the IMC stage encounters missing modalities without
+compensation, leading to substantial performance deteriora-
+tion. More detailed ablation results for each missing modal-
+ity are shown in Supplementary Material.
+Further Analysis
+In this section, we focus on TMDC’s performance under
+noisy conditions, the training dynamics of different loss
+functions in the IMD stage, and the relationships between
+representations under various missing modality scenarios.
+(a) Losses in MSD Module
+ (b) Losses in MCD Module
+Figure 3: Visualization of the training losses in IMD stage
+on MOSI dataset.
+Analysis of Experiments on Noisy Datasets.Here we in-
+troduce controlled noise to simulate realistic data collection
+challenges. Specifically, we add gaussian noise of varying
+intensities (Gao et al. 2024) to the existing modality rep-
+resentations across both training stages, as well as during
+validation and testing. Table 3 reports the average perfor-
+mance across seven missing modality scenarios. We observe
+a clear performance degradation as noise intensity increases.
+In IEMOCAP, TMDC’s accuracy drops significantly from
+=== 第 7 页 ===
+(a) In IMD Stage
+ (b) In IMC Stage with ‘A,T,V’
+ (c) In IMC Stage with ‘A’
+ (d) In IMC Stage with ‘A,V’
+Figure 4: Visualization of cosine similarity of representations on IEMOCAP dataset.
+73.8/73.6 to 37.1/32.2 when noise intensity reaches 20,
+while in MOSEI, the impact is less pronounced, with per-
+formance declining from 81.2/80.8 to 66.6/63.9. Despite the
+degradation, TMDC consistently outperforms MoMKE at
+all noise levels, particularly at a noise intensity of 10, where
+it surpasses MoMKE by an average of 10 points across all
+datasets.
+MOSI MOSEI IEMOCAP
+TMDC77.64/77.35 81.22/80.76 73.77/73.64
+w/o IMD 74.48/74.34 79.76/79.36 72.59/71.76
+w/o IMC 74.17/73.97 79.74/79.41 66.05/65.94
+w/o MCD 75.67/75.26 80.03/79.52 72.41/71.99
+w/o MSD 74.76/74.16 80.03/79.92 71.68/71.24
+Table 2: Ablation studies on different datasets. The aver-
+aged results of all seven conditions are reported. Best per-
+formance is bold.
+MethodsGaussian Noise
+ϵ= 5ϵ= 10ϵ= 20
+Results on Noisy MOSI
+MoMKE 55.9/55.8 53.9/54.1 52.7/52.9
+TMDC 68.4/67.8 60.8/60.2 53.0/53.0
+Results on Noisy MOSEI
+MoMKE 71.0/69.3 61.2/58.4 59.4/55.4
+TMDC 74.5/73.7 71.2/70.5 66.3/63.9
+Results on Noisy IEMOCAP
+MoMKE 46.1/44.2 34.4/30.3 31.1/28.3
+TMDC 60.0/57.9 51.0/48.5 37.1/32.2
+Table 3: Performance on noisy datasets. The averaged results
+of all seven conditions are reported.
+Analysis of Training Convergence.To evaluate the train-
+ing stability and convergence of IMD stage, we track the be-
+havior of 12 loss terms over 100 epochs on the MOSI dataset
+in Figure 3. The results show a clear correlation between the
+decline rate of each loss and the performance of its corre-
+sponding unimodal representation. As reported in Table 1,
+the text modality outperforms others on MOSI, while the au-
+dio modality performs worst. Consistently, text-related loss
+terms (e.g.,LT
+S,LT
+C,LT
+Spe,LT
+Com) converge more rapidlythan those of the audio modality, with the video modality
+falling in between. We also observe that the VIB-related
+losses are slightly higher than the interaction-based ones,
+possibly due to inherent noise in the data. Nonetheless, all
+losses consistently decrease over time, confirming the effec-
+tiveness and stability of the optimization process.
+Analysis of Representations’ Relations.TMDC learns
+both modality-specific and modality-invariant representa-
+tions during training. To analyze their relationships under
+different settings, we visualize average cosine similarities on
+the IEMOCAP test set in Figure 4, whereS m=ˆXm
+Speand
+Cm=ˆXm
+Com. We consider four cases: (a) the IMD stage, (b)
+the IMC stage with all modalities, (c) only audio available,
+and (d) audio and video available.
+Across most settings,S mare consistently more similar
+to each other than toC m, suggesting they capture comple-
+mentary information. This relationship remains stable un-
+der different missing conditions, demonstrating the robust-
+ness of the representations. We also observe that similarity
+scores decrease as more modalities are available (0.87–0.92
+with only audio; 0.82–0.88 with audio and video; 0.68–0.77
+with all). This indicates that richer modality input encour-
+ages more diverse representation learning. Notably, when
+only audio is present, the inferred text and video represen-
+tations differ from the audio, showing that the IMC module
+generates distinct and informative approximations for miss-
+ing modalities.
+Conclusion
+This paper presents TMDC, a Two-stage Modality Denois-
+ing and Complementation framework designed to address
+the challenges of noisy and missing modalities in MSA.
+TMDC operates in two stages: the first stage reduces noise
+by learning both modality-specific and modality-invariant
+features from complete data; the second stage enhances rep-
+resentations by leveraging available modalities to comple-
+ment the missing ones during training on incomplete data.
+Extensive experiments on three benchmark datasets under
+seven missing modality scenarios and high-noise condi-
+tions demonstrate that TMDC consistently outperforms ex-
+isting methods. While the framework achieves strong perfor-
+mance, it introduces some redundancy in the shared repre-
+sentations. Future work will aim to reduce this redundancy
+to further improve efficiency.
+=== 第 8 页 ===
+Acknowledgments
+This work was supported by Sichuan Science and Technol-
+ogy Program (Grant No.2024YFG0006), the National Nat-
+ural Science Foundation of China (Grant No.U24A20250),
+and the Fundamental Research Funds for the Central Uni-
+versities (No.ZYGX2024Z005).
+References
+Alemi, A. A.; Fischer, I.; Dillon, J. V .; and Murphy, K. 2022.
+Deep Variational Information Bottleneck. InInternational
+Conference on Learning Representations.
+Busso, C.; Bulut, M.; Lee, C.-C.; Kazemzadeh, A.; Mower,
+E.; Kim, S.; Chang, J. N.; Lee, S.; and Narayanan, S. S.
+2008. IEMOCAP: Interactive emotional dyadic motion cap-
+ture database.Language resources and evaluation, 42: 335–
+359.
+Fang, J.; Wang, W.; Lin, G.; and Lv, F. 2024. Sentiment-
+oriented Sarcasm Integration for Video Sentiment Analy-
+sis Enhancement with Sarcasm Assistance. InProceedings
+of the 32nd ACM International Conference on Multimedia,
+5810–5819.
+Gao, Z.; Jiang, X.; Xu, X.; Shen, F.; Li, Y .; and Shen, H. T.
+2024. Embracing Unimodal Aleatoric Uncertainty for Ro-
+bust Multimodal Fusion. InProceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+26876–26885.
+Guo, Z.; Jin, T.; and Zhao, Z. 2024. Multimodal Prompt
+Learning with Missing Modalities for Sentiment Analysis
+and Emotion Recognition. InProceedings of the 62nd An-
+nual Meeting of the Association for Computational Linguis-
+tics (Volume 1: Long Papers), 1726–1736.
+Hazarika, D.; Zimmermann, R.; and Poria, S. 2020. Misa:
+Modality-invariant and-specific representations for multi-
+modal sentiment analysis. InProceedings of the 28th ACM
+international conference on multimedia, 1122–1131.
+He, P.; Liu, X.; Gao, J.; and Chen, W. 2021. DE-
+BERTA: DECODING-ENHANCED BERT WITH DISEN-
+TANGLED ATTENTION. InInternational Conference on
+Learning Representations.
+Jaiswal, M.; and Provost, E. M. 2020. Privacy enhanced
+multimodal neural representations for emotion recognition.
+InProceedings of the AAAI Conference on Artificial Intelli-
+gence, volume 34, 7985–7993.
+Kingma, D. P. 2013. Auto-encoding variational bayes.arXiv
+preprint arXiv:1312.6114.
+Kingma, D. P.; and Ba, J. 2014. Adam: A method for
+stochastic optimization.arXiv preprint arXiv:1412.6980.
+Li, M.; Yang, D.; Lei, Y .; Wang, S.; Wang, S.; Su, L.; Yang,
+K.; Wang, Y .; Sun, M.; and Zhang, L. 2024a. A Unified Self-
+Distillation Framework for Multimodal Sentiment Analy-
+sis with Uncertain Missing Modalities. InProceedings of
+the AAAI Conference on Artificial Intelligence, volume 38,
+10074–10082.
+Li, M.; Yang, D.; Zhao, X.; Wang, S.; Wang, Y .; Yang,
+K.; Sun, M.; Kou, D.; Qian, Z.; and Zhang, L. 2024b.Correlation-Decoupled Knowledge Distillation for Multi-
+modal Sentiment Analysis with Incomplete Modalities. In
+Proceedings of the IEEE/CVF Conference on Computer Vi-
+sion and Pattern Recognition, 12458–12468.
+Lian, Z.; Chen, L.; Sun, L.; Liu, B.; and Tao, J. 2023. GC-
+Net: Graph completion network for incomplete multimodal
+learning in conversation.IEEE Transactions on pattern
+analysis and machine intelligence, 45(7): 8419–8432.
+Liang, P. P.; Deng, Z.; Ma, M. Q.; Zou, J. Y .; Morency, L.-P.;
+and Salakhutdinov, R. 2024. Factorized contrastive learning:
+Going beyond multi-view redundancy.Advances in Neural
+Information Processing Systems, 36.
+Liang, P. P.; Zadeh, A.; and Morency, L.-P. 2022. Foun-
+dations and Trends in Multimodal Machine Learning: Prin-
+ciples, Challenges, and Open Questions.arXiv preprint
+arXiv:2209.03430.
+Lin, R.; and Hu, H. 2023. Dynamically shifting multimodal
+representations via hybrid-modal attention for multimodal
+sentiment analysis.IEEE Transactions on Multimedia.
+Liu, A.; Tan, Z.; Wan, J.; Liang, Y .; Lei, Z.; Guo, G.; and
+Li, S. Z. 2021. Face anti-spoofing via adversarial cross-
+modality translation.IEEE Transactions on Information
+Forensics and Security, 16: 2759–2772.
+Luo, W.; Xu, M.; and Lai, H. 2023. Multimodal reconstruct
+and align net for missing modality problem in sentiment
+analysis. InInternational conference on multimedia mod-
+eling, 411–422. Springer.
+Mai, S.; Sun, Y .; Xiong, A.; Zeng, Y .; and Hu, H. 2023. Mul-
+timodal Boosting: Addressing Noisy Modalities and Identi-
+fying Modality Contribution.IEEE Transactions on Multi-
+media.
+Mai, S.; Zeng, Y .; and Hu, H. 2022. Multimodal information
+bottleneck: Learning minimal sufficient unimodal and mul-
+timodal representations.IEEE Transactions on Multimedia,
+25: 4121–4134.
+Pham, H.; Liang, P. P.; Manzini, T.; Morency, L.-P.; and
+P´oczos, B. 2019. Found in translation: Learning robust joint
+representations by cyclic translations between modalities.
+InProceedings of the AAAI conference on artificial intel-
+ligence, volume 33, 6892–6899.
+Schneider, S.; Baevski, A.; Collobert, R.; and Auli, M. 2019.
+wav2vec: Unsupervised pre-training for speech recognition.
+arXiv preprint arXiv:1904.05862.
+Tsai, Y .-H. H.; Bai, S.; Liang, P. P.; Kolter, J. Z.; Morency,
+L.-P.; and Salakhutdinov, R. 2019. Multimodal transformer
+for unaligned multimodal language sequences. InProceed-
+ings of the conference. Association for computational lin-
+guistics. Meeting, volume 2019, 6558. NIH Public Access.
+Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones,
+L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. At-
+tention is all you need.Advances in neural information pro-
+cessing systems, 30.
+Wang, D.; Liu, S.; Wang, Q.; Tian, Y .; He, L.; and Gao, X.
+2022. Cross-modal enhancement network for multimodal
+sentiment analysis.IEEE Transactions on Multimedia, 25:
+4909–4921.
+=== 第 9 页 ===
+Wang, Y .; Cui, Z.; and Li, Y . 2023. Distribution-consistent
+modal recovering for incomplete multimodal learning. In
+Proceedings of the IEEE/CVF International Conference on
+Computer Vision, 22025–22034.
+Wang, Y .; Li, Y .; and Cui, Z. 2024. Incomplete
+multimodality-diffused emotion recognition.Advances in
+Neural Information Processing Systems, 36.
+Wei, S.; Luo, C.; and Luo, Y . 2023. MMANet: Margin-
+aware distillation and modality-aware regularization for in-
+complete multimodal learning. InProceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 20039–20049.
+Xu, W.; Jiang, H.; and Liang, X. 2024. Leveraging Knowl-
+edge of Modality Experts for Incomplete Multimodal Learn-
+ing. InProceedings of the 32nd ACM International Confer-
+ence on Multimedia, 438–446.
+Zadeh, A.; Zellers, R.; Pincus, E.; and Morency, L.-P. 2016.
+Mosi: multimodal corpus of sentiment intensity and sub-
+jectivity analysis in online opinion videos.arXiv preprint
+arXiv:1606.06259.
+Zadeh, A. B.; Liang, P. P.; Poria, S.; Cambria, E.; and
+Morency, L.-P. 2018. Multimodal language analysis in the
+wild: Cmu-mosei dataset and interpretable dynamic fusion
+graph. InProceedings of the 56th Annual Meeting of the
+Association for Computational Linguistics (Volume 1: Long
+Papers), 2236–2246.
+Zeng, Y .; Mai, S.; Yan, W.; and Hu, H. 2023. Multimodal
+reaction: Information modulation for cross-modal represen-
+tation learning.IEEE Transactions on Multimedia.
+Zhang, K.; Zhang, Z.; Li, Z.; and Qiao, Y . 2016. Joint face
+detection and alignment using multitask cascaded convo-
+lutional networks.IEEE signal processing letters, 23(10):
+1499–1503.
+Zhao, J.; Li, R.; and Jin, Q. 2021. Missing modality imagina-
+tion network for emotion recognition with uncertain missing
+modalities. InProceedings of the 59th Annual Meeting of
+the Association for Computational Linguistics and the 11th
+International Joint Conference on Natural Language Pro-
+cessing (Volume 1: Long Papers), 2608–2618.
+Zhao, Z.; Liu, Q.; and Wang, S. 2021. Learning deep global
+multi-scale and local attention features for facial expression
+recognition in the wild.IEEE Transactions on Image Pro-
+cessing, 30: 6544–6556.
+Zhu, A.; Hu, M.; Wang, X.; Yang, J.; Tang, Y .; and Ren, F.
+2024. KEBR: Knowledge Enhanced Self-Supervised Bal-
+anced Representation for Multimodal Sentiment Analysis.
+InProceedings of the 32nd ACM International Conference
+on Multimedia, 5732–5741.
+Zhuang, Y .; Zhang, Y .; Deng, J.; and Ren, F. 2025. R3DG:
+Retrieve, Rank, and Reconstruction with Different Granular-
+ities for Multimodal Sentiment Analysis.Research, 8: 0729.
+Zhuang, Y .; Zhang, Y .; Hu, Z.; Zhang, X.; Deng, J.; and Ren,
+F. 2024. GLoMo: Global-Local Modal Fusion for Multi-
+modal Sentiment Analysis. InProceedings of the 32nd ACM
+International Conference on Multimedia, 1800–1809.Zong, D.; Ding, C.; Li, B.; Li, J.; Zheng, K.; and Zhou, Q.
+2023. AcFormer: An Aligned and Compact Transformer for
+Multimodal Sentiment Analysis. InProceedings of the 31st
+ACM International Conference on Multimedia, 833–842.
+Zuo, H.; Liu, R.; Zhao, J.; Gao, G.; and Li, H. 2023. Exploit-
+ing modality-invariant feature for robust multimodal emo-
+tion recognition with missing modalities. InICASSP 2023-
+2023 IEEE International Conference on Acoustics, Speech
+and Signal Processing (ICASSP), 1–5. IEEE.
+=== 第 10 页 ===
+Supplementary Material
+Additional Implementation Details
+Consistent with prior work (Xu, Jiang, and Liang 2024; Guo,
+Jin, and Zhao 2024), we evaluate the performance of TMDC
+under fixed missing modality scenarios, where a specific
+modality is absent during training, validation, and testing.
+The missing modality is replaced with an all-zero vector.
+For example, in Tables 1 and 4, ‘A’ indicates that only the
+audio modality is available. It is important to note that, fol-
+lowing previous studies(Wang, Li, and Cui 2024; Xu, Jiang,
+and Liang 2024; Wang, Cui, and Li 2023), modality miss-
+ingness is only applied in the IMC stage of TMDC. The
+IMD stage is trained using the complete dataset. All ex-
+periments are implemented in PyTorch and conducted on a
+GTX 3090 GPU with CUDA 11.5. We use Torch version
+1.12.1 for model training and Adam optimizer (Kingma and
+Ba 2014) across all datasets. Due to variations in datasets
+and modalities, we define a set of default hyperparameters
+for each dataset: MOSI:D= 256, learning rate = 0.0001,
+batch size = 32, dropout rate = 0.5,β= 0.01, IMD Stage: 80
+epochs, IMC Stage: 100 epochs. MOSEI:D= 256, learning
+rate = 0.0001, batch size = 64, dropout rate = 0.6,β= 0.01,
+IMD Stage: 50 epochs, IMC Stage: 100 epochs. IEMOCAP:
+D= 256, learning rate = 0.0001, batch size = 16, dropout
+rate = 0.5,β= 0.01, IMD Stage: 50 epochs, IMC Stage: 100
+epochs.
+Additional Results
+Detailed Ablation Studies.Although TMDC demon-
+strates strong performance across datasets, it remains un-
+clear how each module and stage contributes to its effec-
+tiveness. To investigate this, we conduct an ablation study
+by evaluating four TMDC variants: (1) ‘w/o IMD’: Ex-
+cludes the Intra-Modality Denoising stage, meaning TMDC
+is not trained on complete datasets before transitioning to the
+IMC stage. (2) ‘w/o IMC’: Removes Inter-Modality Com-
+plementation, where representations from available modal-
+ities are directly concatenated without additional compen-
+sation after the IMD stage. (3) ‘w/o MCD’: Excludes the
+Modality-Common Denoising Module in both stages, pre-
+venting any compensation for missing information. (4) ‘w/o
+MSD’: Removes the Modality-Specific Denoising Module
+in both stages, relying only on shared modality-invariant in-
+formation for predictions.
+Table 4 presents the results of TMDC and its four variants
+across multiple missing-modality scenarios. We observe that
+‘w/o IMC’ performs particularly poorly when only a single
+modality is available, such as ‘A’ and ‘V’ in MOSI or ‘A’
+in MOSEI. This suggests that losing a dominant modality
+(e.g., ‘T’ in MOSI and MOSEI) severely impacts perfor-
+mance. Overall, removing both denoising modules leads to
+performance degradation, with ‘w/o MSD’ having a more
+pronounced impact than ‘w/o MCD’. This may be because
+modality-specific information is more discriminative than
+modality-invariant information, as the latter can be inferred
+from other modalities, whereas the former cannot. Conse-
+quently, losing modality-specific information results in a
+greater drop in performance.Detailed Performance on Noisy Datasets.Table 7
+presents the performance of different models under various
+noise conditions across the MOSI, MOSEI, and IEMOCAP
+datasets. Overall, TMDC consistently outperforms other
+methods in most settings. Although its performance slightly
+lags in certain cases where only the audio (A) or visual (V)
+modality is available, TMDC demonstrates greater robust-
+ness and stability in more complex scenarios. For example,
+under multiple noisy conditions on the MOSEI and IEMO-
+CAP datasets, TMDC achieves notably better results com-
+pared to other baselines.
+Hyper-parameter Analysis.To further assess TMDC’s
+robustness to hyper-parameter, Figure 5 analyzes the im-
+pact of the VIB loss coefficientβunder different miss-
+ing modality scenarios on the MOSI dataset. We observe
+that the effect ofβvaries across scenarios. In general,
+largerβvalues—indicating a stronger weight on the VIB
+loss—tend to degrade performance. However, an exception
+occurs when only the text (T) and visual (V) modalities are
+present, where a higherβslightly improves results. Over-
+all, TMDC remains stable, with only minor average perfor-
+mance fluctuations asβvaries between 0.01 and 0.2 (Accu-
+racy: 77.16–77.64).
+Computation Overhead.We conducted runtime bench-
+marking on the MOSI dataset using PyTorch on a sin-
+gle RTX 3090 GPU (CUDA 11.5). Results are summa-
+rized in Table 5. TMDC achieves strong efficiency with
+only a marginal increase in parameter count compared to
+MoMKE. It significantly outperforms heavier models like
+IMDer and DiCMoR in terms of training time, largely due
+to its lightweight design and the absence of computationally
+intensive components like diffusion or flow-based modules.
+Robustness of TMDC.To comprehensively evaluate the
+robustness of TMDC, Table 6 reports the standard devia-
+tions over five runs. On the MOSI and MOSEI datasets,
+TMDC achieves 77.64±0.08 / 77.35±0.08 and 81.22±0.01
+/ 80.76±0.08, respectively. These results demonstrate that
+TMDC not only achieves strong performance but also main-
+tains high stability across runs. The consistent improvements
+over recent state-of-the-art methods, including MPLMM
+(ACL 2024), IMDer (NeurIPS 2023), and DiCMoR (ICCV
+2023), further validate the effectiveness and robustness of
+our approach.
+Visualization Analysis
+To further evaluate the effectiveness of TMDC, we visualize
+the classification performance using t-SNE on the IEMO-
+CAP dataset using only the text modality in the IMC stage.
+Figure 6 compares TMDC with four variant models. In the
+visualization, neutral, happiness, sadness, and anger are rep-
+resented in red, orange, black, and blue, respectively.
+The results indicate that removing any stage or module
+degrades classification performance. Specifically, eliminat-
+ing IMD causes all emotion categories—except anger—to
+become more dispersed. Removing IMC leads to the neu-
+tral category splitting into two distinct clusters, resulting in
+a sharp accuracy drop. While removing a single module has
+=== 第 11 页 ===
+ConfigsModalities
+A T V A,V A,T T,V T,A,V
+Ablation Results on MOSI
+w/o IMD 51.07/50.95 86.12/85.88 61.74/61.15 62.20/62.42 86.13/85.98 86.89/86.85 87.20/87.15
+w/o IMC 52.13/51.19 86.13/86.06 60.37/59.81 60.67/60.86 85.82/85.85 86.89/86.88 87.20/87.15
+w/o MCD 54.42/52.59 86.43/86.35 63.26/63.29 64.63/63.70 86.28/86.25 87.35/87.32 87.35/87.33
+w/o MSD 47.56/43.34 87.02/87.04 62.35/62.30 64.02/64.23 87.20/87.20 87.65/87.60 87.50/87.44
+TMDC62.35/60.24 87.35/87.27 64.63/64.82 65.40/65.60 87.50/87.45 87.96/87.87 88.26/88.19
+Ablation Results on MOSEI
+w/o IMD 72.43/70.48 86.32/86.22 67.03/66.69 71.46/71.25 86.76/86.77 87.12/87.01 87.23/87.13
+w/o IMC 70.61/70.38 86.71/86.57 69.32/68.20 70.64/69.90 86.87/86.83 86.96/86.93 87.09/87.09
+w/o MCD 72.67/71.20 86.05/85.98 67.58/66.71 72.40/71.30 86.90/86.85 87.29/87.27 87.34/87.36
+w/o MSD 72.65/71.45 86.68/86.66 68.55/67.78 72.81/72.12 87.04/86.91 87.29/87.25 87.31/87.28
+TMDC73.64/72.23 86.87/86.82 71.60/70.65 74.13/73.41 87.15/87.14 87.48/87.43 87.67/87.62
+Ablation Results on IEMOCAP
+w/o IMD 69.60/69.60 75.57/75.27 57.18/52.78 69.01/68.71 79.41/79.06 77.76/77.53 79.62/79.36
+w/o IMC 61.20/62.81 65.92/67.17 53.22/49.35 62.82/61.14 73.27/74.71 71.07/70.81 74.85/75.59
+w/o MCD 68.04/69.39 76.77/76.72 55.01/51.45 69.50/69.33 79.68/79.44 78.14/77.78 79.71/79.84
+w/o MSD 67.58/69.90 75.01/74.77 53.64/49.61 68.28/67.84 79.69/79.36 77.86/77.44 79.71/79.78
+TMDC70.45/71.40 77.88/78.44 59.18/55.33 70.21/69.91 79.99/81.45 78.20/78.29 80.48/80.69
+Table 4: Ablation studies on MOSI, MOSEI, and IEMOCAP datasets.Best performance is bold.
+(a) ‘A’, ‘V’, and ‘A,V’
+ (b) ‘T’ and ‘A,T’
+ (c) ‘T,V’ and ‘A,T,V’
+ (d) A VG
+Figure 5: Analysis of hyper-parameterβin VIB loss.
+Model Parameters Training Time
+MPLMM 128M 3,433s
+DiCMoR 113M 12,792s
+IMDer 122M 175,138s
+MoMKE 5.4M 39s
+TMDC 6.1M 35s
+Table 5: Computation overhead comparison on MOSI.
+Dataset ACC F1
+MOSI 77.64±0.08 77.35±0.08
+MOSEI 81.22±0.01 80.76±0.08
+Table 6: Robustness of TMDC with 5 different random seeds
+(95%confidence intervals). Averaged ‘ACC/F1’ of all miss-
+ing scenarios is reported.a less severe impact than removing IMC, the resulting rep-
+resentations are still more scattered compared to the full
+TMDC model. These findings highlight the importance of
+each stage and module in TMDC, demonstrating their con-
+tributions to maintaining well-structured and distinct emo-
+tion representations.
+=== 第 12 页 ===
+ModelsσModalities
+A T V A,V A,T T,V T,A,V
+Results on MOSI
+DiCMoR 553.24/47.90 70.58/70.51 56.02/49.02 55.09/54.72 72.87/72.99 69.97/69.75 72.22/71.56
+MoMKE 5 52.90/52.2558.69/58.90 52.13/51.83 52.29/51.79 59.49/59.41 57.77/57.93 57.93/58.15
+TMDC 5 46.80/43.0677.90/77.84 59.15/59.37 59.91/59.95 77.90/77.84 78.96/78.98 77.90/77.56
+DiCMoR 10 50.46/45.91 59.72/57.88 51.85/47.9154.63/50.62 61.57/58.04 63.43/59.81 60.65/58.66
+MoMKE 1051.68/51.6954.42/54.6953.96/54.1853.81/54.05 54.27/54.33 54.57/54.78 54.88/54.96
+TMDC 10 46.80/43.6270.12/70.2149.70/47.90 54.42/54.67 69.51/69.69 67.99/68.18 66.77/66.97
+DiCMoR 20 48.32/44.69 50.00/47.67 47.87/45.36 42.68/38.71 50.46/46.80 50.15/48.34 50.61/48.31
+MoMKE 2052.44/52.6154.27/54.5153.35/53.6451.22/51.36 52.13/52.4253.35/53.6051.83/51.97
+TMDC 20 50.46/50.2654.57/54.8352.13/52.3953.81/52.63 54.57/54.8252.90/52.8653.05/53.18
+Results on MOSEI
+MoMKE 5 60.48/55.91 77.74/77.67 63.87/60.83 63.04/59.63 77.66/77.10 77.11/76.94 77.22/76.89
+TMDC 562.25/57.97 80.24/80.17 68.99/68.33 68.71/68.74 80.46/80.12 80.63/80.23 80.13/80.03
+MoMKE 1060.37/55.01 62.25/60.66 61.89/55.25 60.76/56.46 60.48/59.90 61.28/61.44 61.20/59.93
+TMDC 10 57.68/55.18 76.17/76.02 67.58/67.15 66.87/66.56 76.03/75.78 77.19/76.52 76.91/76.20
+MoMKE 20 59.74/55.50 60.13/55.45 57.65/55.00 58.06/54.85 58.67/56.52 60.26/54.95 61.59/55.37
+TMDC 2060.43/55.89 70.86/70.62 63.10/62.08 65.05/57.05 63.92/61.27 71.02/70.16 69.95/69.90
+Results on IEMOCAP
+MoMKE 5 32.75/29.0148.99/49.48 42.83/37.65 42.57/37.75 50.28/50.84 52.45/51.92 52.66/52.45
+TMDC 533.40/25.8567.86/67.88 48.32/44.35 57.05/52.11 70.37/72.01 71.44/72.09 71.30/71.32
+MoMKE 10 31.47/27.6732.71/29.46 39.08/31.17 36.83/31.77 32.15/28.78 34.36/31.32 34.43/31.65
+TMDC 1033.18/25.7745.64/43.91 43.88/39.52 46.17/41.05 62.64/62.68 63.12/64.07 62.23/62.54
+MoMKE 20 31.11/28.27 31.19/28.0331.37/28.35 31.16/28.44 30.69/28.10 31.28/28.34 30.98/28.62
+TMDC 2033.60/25.78 30.11/28.5130.76/28.95 43.94/37.10 34.57/30.22 43.50/37.68 42.85/37.21
+Table 7: Performance on noisy datasets. Best performance is bold.
+(a) TMDC
+ (b) w/o IMD
+ (c) w/o IMC
+ (d) w/o MSD
+ (e) w/o MCD
+Figure 6: t-SNE of the fused representations on IEMOCAP when only text modality is present. We use red, orange, black and
+blue to represent neutral, happiness, sadness and anger, respectively.
